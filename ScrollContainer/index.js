@@ -1,22 +1,24 @@
 import React, { Component } from 'react';
-import { ScrollView, StyleSheet, Animated, View } from 'react-native';
-
-// config header collapse settings
-const collapseThreshold = 60;
-const collapseDuration = 300;
-const expandThreshold = 20;
-const expandDuration = 200;
-const gracePeriodBetweenAnimations = 300;
+import { ScrollView, StyleSheet, Animated, View, Text } from 'react-native';
+import PropTypes from 'prop-types';
 
 class ScrollContainer extends Component {
-  _contentHeight = 0;
-  _containerHeight = 0;
-  _lowestYScrollPt = 0;
+  // these will be set onLayout, used for calculations regarding position as a factor of total height
+  _contentLength = 0;
+  _containerLength = 0;
+  _lowestScrollPt = 0;
 
-  _anim = new Animated.Value(0);
-  _oldY = 0;
+  // config header collapse settings
+  _collapseThreshold = this.props.collapseThreshold || 60;
+  _collapseDuration = this.props.collapseDuration || 300;
+  _expandThreshold = this.props.expandThreshold || 20
+  _expandDuration = this.props.expandDuration || 200;
+  _animGracePeriod = this.props.animGracePeriod || 300;
+
+  _anim = new Animated.Value(1);
+  _oldPt = 0;
   _wasScrollingDown = false;
-  _lastDirectionChangeY = 0;
+  _lastDirectionChangePt = 0;
   _isAnimating = false;
   // _lastEvtTime = new Date().getTime();
 
@@ -25,22 +27,23 @@ class ScrollContainer extends Component {
   }
 
   onContentSizeChange = (contentWidth, contentHeight) => {
-    this._contentHeight = contentHeight;
+    this._contentLength = this.props.horizontal ? contentWidth : contentHeight;
     this.setLowestScrollPt();
   }
 
   onContainerLayout = ({ nativeEvent }) => {
-    this._containerHeight = nativeEvent.layout.height;
+    this._containerLength = this.props.horizontal ? nativeEvent.layout.width : nativeEvent.layout.height;
     this.setLowestScrollPt();
   }
 
   onHeaderContainerLayout = ({ nativeEvent }) => {
+    if (this.state.headerDimen !== 0) return null;
     const headerDimen = this.props.horizontal ? nativeEvent.layout.width : nativeEvent.layout.height;
     this.setState({ headerDimen });
   }
 
   setLowestScrollPt = () => {
-    this._lowestYScrollPt = this._contentHeight - this._containerHeight;
+    this._lowestScrollPt = this._contentLength - this._containerLength;
   }
 
   execAnimation = (toValue) => {
@@ -49,68 +52,83 @@ class ScrollContainer extends Component {
       this._anim,
       {
         toValue,
-        duration: toValue === 0 ? collapseDuration : expandDuration,
+        duration: toValue === 0 ? this._collapseDuration : this._expandDuration,
       }
     ).start(() => {
       setTimeout(() => {
         this._isAnimating = false;
-      }, gracePeriodBetweenAnimations);
+      }, this._animGracePeriod);
     });
   }
 
   onScroll = ({ nativeEvent }) => {
-    const newY = nativeEvent.contentOffset.y;
+    const newPt = nativeEvent.contentOffset[this.props.horizontal ? 'x' : 'y'];
     // if we are above or below content thresholds, disregard completely
-    if (newY < 0 || newY > this._lowestYScrollPt) return null;
+    if (newPt < 0 || newPt > this._lowestScrollPt) return null;
     // if we are at the top, expand
-    if (newY === 0  && this._anim._value === 0) {
-      this.execAnimation(0);
+    if (newPt === 0  && this._anim._value === 0) {
+      this.execAnimation(1);
       return null;
     }
-    const yDelta = newY - this._oldY;
-    
+    const delta = newPt - this._oldPt;
+
     // get velocity and deliberate duration
 
     // const newMoment = new Date().getTime();
     // const timeSinceLastEvt = newMoment - this._lastEvtTime;
     // this._lastEvtTime = newMoment;
-    // const yPerMs = Math.abs(yDelta / timeSinceLastEvt);
+    // const yPerMs = Math.abs(delta / timeSinceLastEvt);
     // const animDist = globals.headerDimen - globals.headerMinHeight;
     // const duration = (animDist / yPerMs);
 
     // deliberate possible actions
-    const isScrollingDown = yDelta > 0;
-    const shouldCollapse = newY > (this._lastDirectionChangeY + collapseThreshold);
-    const shouldExpand = newY < (this._lastDirectionChangeY - expandThreshold);
-    if (this._wasScrollingDown !== isScrollingDown) this._lastDirectionChangeY = newY;
+    const isScrollingDown = delta > 0;
+    const shouldCollapse = newPt > (this._lastDirectionChangePt + this._collapseThreshold);
+    const shouldExpand = newPt < (this._lastDirectionChangePt - this._expandThreshold);
+    if (this._wasScrollingDown !== isScrollingDown) this._lastDirectionChangePt = newPt;
     // reset caches
     this._wasScrollingDown = isScrollingDown;
-    this._oldY = newY;
+    this._oldPt = newPt;
     // go no further if animation in progress
     if (this._isAnimating) {
       // set most recent pt as 'zero' from which to measure deltas
-       this._lastDirectionChangeY = newY;
+       this._lastDirectionChangePt = newPt;
       return null;
     }
     if (shouldCollapse && this._anim._value === 1) {
-      this.execAnimation(1);
-    } else if (shouldExpand && this._anim._value === 0) {
       this.execAnimation(0);
+    } else if (shouldExpand && this._anim._value === 0) {
+      this.execAnimation(1);
     }
 
   }
 
   render() {
-    const headerTranslate = this._anim.interpolate({
+    const headerDimenInt = this._anim.interpolate({
       inputRange: [0, 1],
-      outputRange: [0, (-this.state.headerDimen + (this.props.headerMinHeight || 0))],
+      outputRange: [this.props.headerMinHeight || 0, this.state.headerDimen],
     });
-    const transform = this.props.horizontal ? [{ translateX: headerTranslate }] : [{ translateY: headerTranslate }];
+    // if we dont yet have headerDimen (from onLayout), we have no max(height/width) to set
+    const headerDimenStyle = this.state.headerDimen !== 0 ? (this.props.horizontal ? { width: headerDimenInt } : { height: headerDimenInt }) : null;
+    // we can't make innerContainer position absolutely tethered until its wrapper first assesses its significant dimen (onLayout)
+    const innerContainerStyle = this.state.headerDimen !== 0 ? (this.props.horizontal ? styles.innerHeaderContainerHorz : styles.innerHeaderContainerVert) : null
     return (
       <View
-        style={styles.container}
+        style={[styles.container, this.props.horizontal ? styles.containerHorz : null]}
         onLayout={this.onContainerLayout}
       >
+        <Animated.View
+          onLayout={this.onHeaderContainerLayout}
+          style={[styles.headerContainerStyle, headerDimenStyle]}
+        >
+          <View style={innerContainerStyle}>
+            {this.props.header ||
+              <View style={this.props.headerContainerStyle || [styles.defaultHeader, this.props.horizontal ? styles.defaultHeaderHorz : styles.defaultHeaderVert]}>
+                <Text style={this.props.headerTextStyle}>{this.props.headerText}</Text>
+              </View>
+            }
+          </View>
+        </Animated.View>
         <ScrollView
           {...this.props}
           style={[styles.sv, this.props.style]}
@@ -119,14 +137,6 @@ class ScrollContainer extends Component {
           scrollEventThrottle={30}
           onScroll={this.onScroll}
         >
-          <Animated.View
-            onLayout={this.onHeaderContainerLayout}
-            style={[styles.headerContainerStyle, { transform }]}
-          >
-            {this.props.header ||
-              <View style={[styles.deafultHeader, this.props.horizontal ? styles.defaultHeaderHorz : styles.defaultHeaderVert]} />
-            }
-          </Animated.View>
           {this.props.children}
         </ScrollView>
       </View>
@@ -140,6 +150,9 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     flex: 1,
   },
+  containerHorz: {
+    flexDirection: 'row',
+  },
   sv: {
     alignSelf: 'stretch',
   },
@@ -147,18 +160,66 @@ const styles = StyleSheet.create({
 
   },
   headerContainerStyle: {
-    alignSelf: 'flex-start',
+    alignSelf: 'stretch',
+    overflow: 'hidden',
+  },
+  innerHeaderContainerVert: {
+    // this will anchor header component to the bottom
+    // cannot be applied until
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    left: 0,
+  },
+  innerHeaderContainerHorz: {
+    // this will anchor header component to the right
+    // cannot be applied until
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    top: 0,
+    flexDirection: 'row',
   },
   defaultHeader: {
     alignSelf: 'stretch',
-    backgroundColor: '#ccc',
+    backgroundColor: 'orchid',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   defaultHeaderVert: {
-    height: 100,
+    height: 60,
   },
   defaultHeaderHorz: {
-    width: 100,
+    width: 60,
   },
 });
+
+ScrollContainer.defaultProps = {
+  collapseThreshold: 0,
+  collapseDuration: 0,
+  expandThreshold: 0,
+  expandDuration: 0,
+  animGracePeriod: 0,
+  horizontal: false,
+  header: null,
+  headerMinHeight: 0,
+  headerText: '',
+  headerContainerStyle: null,
+  headerTextStyle: null,
+};
+
+ScrollContainer.propTypes = {
+  collapseThreshold: PropTypes.number,
+  collapseDuration: PropTypes.number,
+  expandThreshold: PropTypes.number,
+  expandDuration: PropTypes.number,
+  animGracePeriod: PropTypes.number,
+  horizontal: PropTypes.bool,
+  header: PropTypes.element,
+  headerMinHeight: PropTypes.number,
+  headerText: PropTypes.string,
+  // headerContainerStyle,
+  // headerTextStyle,
+};
 
 export default ScrollContainer;
