@@ -1,3 +1,1 @@
-import ScrollContainer from './ScrollContainer';
-
-export ScrollContainer;
+export { default as ScrollContainer } from './ScrollContainer';
