@@ -2,7 +2,7 @@ import React, { Component } from 'react';
 import { Animated, StyleSheet, TouchableOpacity, Text, View, Dimensions } from 'react-native';
 
 const SLIDE_DURATION = 400;
-const SIT_DURATION = 2000;
+const SIT_DURATION = 5000;
 const ON_PRESS_SPEED_MULTIPLIER = 3;
 
 const DEFAULT_BANNER_HEIGHT = 50;
@@ -102,7 +102,7 @@ class NotifBanner extends Component {
           styles.container,
           { height },
         ]}
-        // pointerEvents='box-none'
+        pointerEvents='box-none'
       >
         {this.renderAllBanners()}
       </View>
@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
   bannerContainer: {
     ...StyleSheet.absoluteFillObject,
   },
-  bannerText: {
+  text: {
     color: 'white',
     fontSize: 12,
     fontFamily: 'Avenir',
@@ -132,6 +132,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'red',
     shadowColor: 'black',
+    paddingLeft: 20,
+    paddingRight: 20,
     shadowOpacity: 0.3,
     shadowOffset: {
       width: 0, height: 0,
