@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Animated, View, Text, ActivityIndicator } from 
 import PropTypes from 'prop-types';
 
 const ACTIVITY_INDICATOR_MARGIN = 10;
-const ACTIONABLE_HEIGHT = 20 + (ACTIVITY_INDICATOR_MARGIN * 2); // height of view
+const ACTIONABLE_HEIGHT = 20 + (ACTIVITY_INDICATOR_MARGIN * 2); // height of view (on ios at least)
 
 class ScrollContainer extends Component {
   // these will be set onLayout, used for calculations regarding position as a factor of total height
@@ -25,6 +25,8 @@ class ScrollContainer extends Component {
   _isAnimating = false;
   // _lastEvtTime = new Date().getTime();
 
+  _aiHeight = new Animated.Value(ACTIONABLE_HEIGHT);
+
   state = {
     headerDimen: 0,
     actionActive: false,
@@ -32,7 +34,7 @@ class ScrollContainer extends Component {
 
   componentDidUpdate(prevProps) {
     if (prevProps.endActionMoment !== this.props.endActionMoment) {
-      this.endAction();
+      if (this.state.actionActive) this.endAction();
     }
   }
 
@@ -79,10 +81,7 @@ class ScrollContainer extends Component {
   checkCollapse = (nativeEvent) => {
     const newPt = nativeEvent.contentOffset[this.props.horizontal ? 'x' : 'y'];
     // check if need be to launch action
-    if (this.props.hasAction && newY <= -ACTIONABLE_HEIGHT && !this.state.actionActive) {
-      this.setState({ actionActive: true });
-      this.props.action();
-    }
+    if (this.props.hasAction && newY <= -ACTIONABLE_HEIGHT && !this.state.actionActive) this.startAction();
     // if we are above or below content thresholds, disregard completely
     if (newPt < 0 || newPt > this._lowestScrollPt) return null;
     // if we are at the top, expand
@@ -123,9 +122,20 @@ class ScrollContainer extends Component {
 
   }
 
+  startAction = () => {
+    this.props.action();
+    this.setState({ actionActive: true });
+  }
 
   endAction = () => {
-    this.setState({ actionActive: false });
+    Animated.timing(
+      this._aiHeight,
+      { duration: 300, toValue: 0 }
+    ).start(() => {
+      this.setState({ actionActive: false }, () => {
+        this._aiHeight = new Animated.Value(ACTIONABLE_HEIGHT);
+      });
+    })
   }
 
   render() {
@@ -163,10 +173,14 @@ class ScrollContainer extends Component {
           onScroll={this.onScroll}
         >
           {this.state.actionActive &&
-            <ActivityIndicator
-              size='small'
-              style={styles.activityIndicator}
-            />
+            <Animated.View
+              style={[styles.aiContainer, { height: this._aiHeight }]}
+            >
+              <ActivityIndicator
+                size='small'
+                style={styles.activityIndicator}
+              />
+            </Animated.View>
           }
           {this.props.children}
         </ScrollView>
@@ -226,6 +240,9 @@ const styles = StyleSheet.create({
   activityIndicator: {
     marginTop: ACTIVITY_INDICATOR_MARGIN,
     marginBottom: ACTIVITY_INDICATOR_MARGIN,
+  },
+  aiContainer: {
+    overflow: 'hidden',
   },
 });
 
