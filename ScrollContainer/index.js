@@ -1,6 +1,9 @@
 import React, { Component } from 'react';
-import { ScrollView, StyleSheet, Animated, View, Text } from 'react-native';
+import { ScrollView, StyleSheet, Animated, View, Text, ActivityIndicator } from 'react-native';
 import PropTypes from 'prop-types';
+
+const ACTIVITY_INDICATOR_MARGIN = 10;
+const ACTIONABLE_HEIGHT = 20 + (ACTIVITY_INDICATOR_MARGIN * 2); // height of view
 
 class ScrollContainer extends Component {
   // these will be set onLayout, used for calculations regarding position as a factor of total height
@@ -24,6 +27,13 @@ class ScrollContainer extends Component {
 
   state = {
     headerDimen: 0,
+    actionActive: false,
+  }
+
+  componentDidUpdate(prevProps) {
+    if (prevProps.endActionMoment !== this.props.endActionMoment) {
+      this.endAction();
+    }
   }
 
   onContentSizeChange = (contentWidth, contentHeight) => {
@@ -62,7 +72,17 @@ class ScrollContainer extends Component {
   }
 
   onScroll = ({ nativeEvent }) => {
+    this.checkAction
+    this.checkCollapse(nativeEvent);
+  }
+
+  checkCollapse = (nativeEvent) => {
     const newPt = nativeEvent.contentOffset[this.props.horizontal ? 'x' : 'y'];
+    // check if need be to launch action
+    if (this.props.hasAction && newY <= -ACTIONABLE_HEIGHT && !this.state.actionActive) {
+      this.setState({ actionActive: true });
+      this.props.action();
+    }
     // if we are above or below content thresholds, disregard completely
     if (newPt < 0 || newPt > this._lowestScrollPt) return null;
     // if we are at the top, expand
@@ -103,6 +123,11 @@ class ScrollContainer extends Component {
 
   }
 
+
+  endAction = () => {
+    this.setState({ actionActive: false });
+  }
+
   render() {
     const headerDimenInt = this._anim.interpolate({
       inputRange: [0, 1],
@@ -137,6 +162,12 @@ class ScrollContainer extends Component {
           scrollEventThrottle={30}
           onScroll={this.onScroll}
         >
+          {this.state.actionActive &&
+            <ActivityIndicator
+              size='small'
+              style={styles.activityIndicator}
+            />
+          }
           {this.props.children}
         </ScrollView>
       </View>
@@ -192,6 +223,10 @@ const styles = StyleSheet.create({
   defaultHeaderHorz: {
     width: 60,
   },
+  activityIndicator: {
+    marginTop: ACTIVITY_INDICATOR_MARGIN,
+    marginBottom: ACTIVITY_INDICATOR_MARGIN,
+  },
 });
 
 ScrollContainer.defaultProps = {
@@ -206,6 +241,8 @@ ScrollContainer.defaultProps = {
   headerText: '',
   headerContainerStyle: null,
   headerTextStyle: null,
+  hasAction: false,
+  action: () => {},
 };
 
 ScrollContainer.propTypes = {
