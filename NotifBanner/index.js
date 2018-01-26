@@ -2,7 +2,7 @@ import React, { Component } from 'react';
 import { Animated, StyleSheet, TouchableOpacity, Text, View, Dimensions } from 'react-native';
 
 const SLIDE_DURATION = 400;
-const SIT_DURATION = 5000;
+const SIT_DURATION = 7500;
 const ON_PRESS_SPEED_MULTIPLIER = 3;
 
 const DEFAULT_BANNER_HEIGHT = 50;
@@ -51,7 +51,7 @@ class NotifBanner extends Component {
       if (banner.translateY._value !== toValue) return null;
       setTimeout(() => {
         this.closeBanner(banner, false);
-      }, SIT_DURATION);
+      }, banner.sitDuration || SIT_DURATION);
     });
   }
 
