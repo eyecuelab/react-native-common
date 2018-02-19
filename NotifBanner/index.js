@@ -100,6 +100,7 @@ class NotifBanner extends Component {
       <View
         style={[
           styles.container,
+          this.props.styles || null,
           { height },
         ]}
         pointerEvents='box-none'
